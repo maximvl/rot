@@ -1,0 +1,14 @@
+{application, rots,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+                  ranch,
+                  gproc
+                 ]},
+  {mod, { rots_app, []}},
+  {env, []}
+ ]}.

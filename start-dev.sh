@@ -1,3 +1,8 @@
 #!/bin/bash
 
-erl -sname rot-dev -pa deps/*/ebin apps/*/ebin -s lager -s sync -s rots -s rotc
+node=${1}
+if [ -z ${node} ]; then
+    node="rot-dev"
+fi
+
+erl -sname ${node} -pa deps/*/ebin apps/*/ebin -s lager -s sync -s rot

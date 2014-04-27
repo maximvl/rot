@@ -1,4 +1,4 @@
--module(rotc_sup).
+-module(rot_sup).
 
 -behaviour(supervisor).
 
@@ -9,7 +9,8 @@
 -export([init/1]).
 
 %% Helper macro for declaring children of supervisor
--define(CHILD(I, Type), {I, {I, start_link, []}, permanent, 5000, Type, [I]}).
+-define(CHILD(Id, M, Life, Type, Args),
+        {Id, {M, start_link, Args}, Life, 5000, Type, [M]}).
 
 %% ===================================================================
 %% API functions
@@ -23,5 +24,4 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-  CSup = ?CHILD(rotc_conn_sup, supervisor),
-  {ok, { {one_for_one, 5, 10}, [CSup]} }.
+  {ok, { {one_for_one, 5, 10}, []} }.

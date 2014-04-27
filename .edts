@@ -1,6 +1,6 @@
-:name "rot-dev"
-:node-sname "rot-dev"
+:name "rot-edts"
+:node-sname "rot-edts"
 :lib-dirs '("deps" "apps")
-:start-command "bash start-dev.sh"
+:start-command "bash start-dev.sh rot-edts"
 :app-include-dirs '("include")
 :project-include-dirs '()

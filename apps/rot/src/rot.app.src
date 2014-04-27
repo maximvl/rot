@@ -1,0 +1,15 @@
+{application, rot,
+ [
+  {description, "RPC Over TCP"},
+  {vsn, "0.1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+                  gproc,
+                  poolboy,
+                  ranch
+                 ]},
+  {mod, { rot_app, []}},
+  {env, []}
+ ]}.

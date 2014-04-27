@@ -1,4 +1,4 @@
--module(rotc_app).
+-module(rot_app).
 
 -behaviour(application).
 
@@ -10,7 +10,15 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-  rotc_sup:start_link().
+  case application:get_env(rot, server) of
+    {ok, Props} ->
+      rot:start_server(Props);
+    _ ->
+      ok
+  end,
+  rot_sup:start_link().
 
 stop(_State) ->
+  Name = proplists:get_value(name, application:get_env(rot, server, [])),
+  rot:stop_server(Name),
   ok.

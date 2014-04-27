@@ -1,5 +1,5 @@
-About
-=====
+##About
+
 Rot is RPC over TCP client/server application which allowes transparent parallel synchronious and asynchronious requests between nodes.
 Each erlang node can have one Rot server and several connections to other nodes, under different names.
 
@@ -27,8 +27,14 @@ After connect on node1:
 <12756.340.0>
 ```
 
-Jails
-=====
+####Technologies used:
+* https://github.com/extend/ranch - server connections pool
+* https://github.com/devinus/poolboy - client connections pool
+* https://github.com/uwiger/gproc - connections processes registration
+* https://github.com/rustyio/sync, https://github.com/massemanet/eper - non-stop development and debug
+
+##Jails
+
 Both server and client can set ```{jail, Module}``` option which restricts all requests to that module, ignoring module passed in requests:
 
 ```
@@ -53,13 +59,13 @@ node2:
            ...
 ```
 
-Todo
-====
-Jails:
+##Todo
+
+###Jails:
 * different jails for different clients on server
 * default jail
 
-Nodes:
+###Nodes:
 * disconnect (server forces clients?)
 * nodes graph walking
 * finding shortest paths

@@ -29,7 +29,6 @@ After connect on node1:
 
 ####Technologies used:
 * https://github.com/extend/ranch - server connections pool
-* https://github.com/devinus/poolboy - client connections pool
 * https://github.com/uwiger/gproc - connections processes registration
 * https://github.com/rustyio/sync, https://github.com/massemanet/eper - non-stop development and debug
 

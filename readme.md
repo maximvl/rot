@@ -1,7 +1,7 @@
 ##About
 
 Rot is RPC over TCP client/server application which allowes transparent parallel synchronious and asynchronious requests between nodes.
-Each erlang node can have one Rot server and several connections to other nodes, under different names.
+Each erlang node can start several Rot servers and connections to other nodes under different names.
 
 Start server on node1:
 ```
@@ -34,7 +34,7 @@ After connect on node1:
 * ```rot:connected(Node)``` - number of connections to node
 * ```rot:start_server(Opts)``` - start rot server (see configuration options below)
 * ```rot:stop_server(Name)``` - stops server with name Name
-* ```rot:connect(Host, Opts, Connections)``` - connect to rot server
+* ```rot:connect(Host, Opts, Connections)``` - connect to rot server (see configuration options below)
 * ```rot:connect(Host, Opts)``` - same as ```rot:connect(Host, Opts, 4)```
 * ```rot:connect_link(Host, Opts, Connections)``` - connect to rot server, and link connection pool supervisor
 * ```rot:connect_child_spec(Host, Opts, Connections)``` - supervisor child spec for connection pool supervisor
@@ -82,7 +82,6 @@ node2:
 * jail, default: ```undefined```
 
 ###Client
-* host
 * port, default: ```2222```
 * name, default: ```node()```
 * transport, default: ```tcp```

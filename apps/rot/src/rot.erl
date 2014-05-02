@@ -60,9 +60,9 @@ start_server(Props) ->
   Proto = proplists:get_value(transport, Props, tcp),
   Acceptors = proplists:get_value(acceptors, Props, 10),
   Jail = proplists:get_value(jail, Props, undefined),
-  {ok, _} = ranch:start_listener(Name, Acceptors, rot_util:transport(Proto),
-                                 [{port, Port}, {ip, Ip}],
-                                 rot_server, [{name, Name}, {jail, Jail}]).
+  ranch:start_listener(Name, Acceptors, rot_util:transport(Proto),
+                       [{port, Port}, {ip, Ip}],
+                       rot_server, [{name, Name}, {jail, Jail}]).
 
 stop_server(Name) ->
   ranch:stop_listener(Name).

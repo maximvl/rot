@@ -11,7 +11,7 @@ Start server on node1:
 
 Connect and call from node2:
 ```
-(node2@t530)1> rot:connect(tcp, localhost, 2222, [{name, cl}], 5).
+(node2@t530)1> rot:connect(localhost, [{name, cl}]).
 {ok,<0.153.0>}
 (node2@t530)2> rot:connected().
 [srv]
@@ -26,6 +26,21 @@ After connect on node1:
 (node1@t530)3> rot:call(cl, erlang, self, []).
 <12756.340.0>
 ```
+
+##API
+* ```rot:start()``` - start rot app and dependencies
+* ```rot:stop()``` - start rot app 
+* ```rot:connected()``` - list of connected nodes
+* ```rot:connected(Node)``` - number of connections to node
+* ```rot:start_server(Opts)``` - start rot server (see configuration options below)
+* ```rot:stop_server(Name)``` - stops server with name Name
+* ```rot:connect(Host, Opts, Connections)``` - connect to rot server
+* ```rot:connect(Host, Opts)``` - same as ```rot:connect(Host, Opts, 4)```
+* ```rot:connect_link(Host, Opts, Connections)``` - connect to rot server, and link connection pool supervisor
+* ```rot:connect_child_spec(Host, Opts, Connections)``` - supervisor child spec for connection pool supervisor
+* ```rot:call(Node, M, F, A, Timeout)``` - sync call to node, timeout in ms
+* ```rot:call(Node, M, F, A)``` - same as ```rot:call(Node, M, F, A, 5000)```
+* ```rot:cast(Node, M, F, A)``` - async cast to node
 
 ####Technologies used:
 * https://github.com/extend/ranch - server connections pool
@@ -43,7 +58,7 @@ Both server and client can set ```{jail, Module}``` option which restricts all r
 
 node2:
 ```
-(node2@t530)1> rot:connect(tcp, localhost, 2222, [{name, cl}], 5).
+(node2@t530)1> rot:connect(localhost, [{name, cl}]).
 {ok,<0.118.0>}
 (node2@t530)2> rot:call(srv, erlang, memory, []).
 ** exception error: undefined function ets:memory/0
@@ -57,6 +72,21 @@ node2:
            {foldr,3},
            ...
 ```
+##Configuration
+###Server
+* ip, default: ```{0, 0, 0, 0}```
+* port, default: ```2222```
+* name, deafult: ```node()```
+* transport, default: ```tcp``` (ssl will be supported soon)
+* acceptors, default: ```10```
+* jail, default: ```undefined```
+
+###Client
+* host
+* port, default: ```2222```
+* name, default: ```node()```
+* transport, default: ```tcp```
+* jail, default: ```undefined```
 
 ##Todo
 
@@ -65,6 +95,7 @@ node2:
 * default jail
 
 ###Nodes:
+* stop all servers and clients on application stop?
 * disconnect (server forces clients?)
 * nodes graph walking
 * finding shortest paths

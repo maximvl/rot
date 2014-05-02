@@ -7,7 +7,6 @@
                   kernel,
                   stdlib,
                   gproc,
-                  poolboy,
                   ranch
                  ]},
   {mod, { rot_app, []}},

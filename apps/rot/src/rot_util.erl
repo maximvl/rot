@@ -1,6 +1,6 @@
 -module(rot_util).
 
--export([rpc_call/3, rpc_cast/2, protocol/1]).
+-export([rpc_call/3, rpc_cast/2, protocol/1, transport/1]).
 -export([handle_data/3, pack/2, pack/3]).
 
 rpc_call(Pid, MFA, Timeout) ->
@@ -70,3 +70,6 @@ pack(cast, {F, A}) ->
 
 protocol(ranch_tcp) -> tcp;
 protocol(ranch_ssl) -> ssl.
+
+transport(tcp) -> ranch_tcp;
+transport(ssl) -> ranch_ssl.

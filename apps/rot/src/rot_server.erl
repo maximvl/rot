@@ -6,12 +6,12 @@
 %%% @end
 %%% Created : 25 Apr 2014 by  <>
 %%%-------------------------------------------------------------------
--module(rot_worker).
+-module(rot_server).
 
 -behaviour(gen_server).
 
 %% API
--export([start_link/1, start_link/4]).
+-export([start_link/4]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -24,53 +24,20 @@
                 proto = tcp :: tcp | ssl,
                 jail :: module() | undefined,
                 options :: list(),
+                host :: any(),
                 local_name :: any(),
                 remote_name :: any()}).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
-%% client
-start_link([client, Trans, Host, Port, Opts]) ->
-  gen_server:start_link(?MODULE, [client, Trans, Host, Port, Opts], []).
-
-%% server
 start_link(Ref, Socket, Trans, Opts) ->
-  gen_server:start_link(?MODULE, [server, Ref, Socket, Trans, Opts], []).
-
-
-%% start_server(Ref, Socket, Trans, Opts) ->
-%%   gen_server:start_link({local, ?SERVER}, ?MODULE,
-%%                         [server, Ref, Socket, Trans, Opts], []).
-
-%% start_client(Transport, Host, Port, Opts) ->
-%%   gen_server:start_link({local, ?SERVER}, ?MODULE,
-%%                         [client, Transport, Host, Port, Opts], []).
+  gen_server:start_link(?MODULE, [Ref, Socket, Trans, Opts], []).
 
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
-init([client, Transport, Host, Port, Opts]) ->
-  Jail = proplists:get_value(jail, Opts),
-  LocalName = proplists:get_value(name, Opts, node()),
-  {ok, Socket} = Transport:connect(Host, Port, [{packet, 4},
-                                                {active, false}]),
-  Transport:setopts(Socket, [{packet, 4}]),
-  Transport:send(Socket, term_to_binary({reg, LocalName})),
-  case Transport:recv(Socket, 0, 5000) of
-    {ok, Data} ->
-      {ok, RName} = binary_to_term(Data),
-      gproc:add_local_property({rot_connection, RName}, ok),
-      Transport:setopts(Socket, [{active, true}]),
-      Proto = rot_util:protocol(Transport),
-      {ok, #state{socket=Socket, transport=Transport,
-                  options=Opts, jail=Jail, proto=Proto,
-                  remote_name=RName, local_name=LocalName}};
-    E ->
-      E
-  end;
-
-init([server, Ref, Socket, Trans, Opts]) ->
+init([Ref, Socket, Trans, Opts]) ->
   JailMod = proplists:get_value(jail, Opts),
   LocalName = proplists:get_value(name, Opts),
   true = LocalName /= undefined,
@@ -115,27 +82,32 @@ handle_info({Proto, Socket, Data}, #state{socket=Socket,
   proc_lib:spawn(fun() -> rot_util:handle_data(Name, Data, Jail) end),
   {noreply, State};
 
+%% server init
 handle_info({init, Ref}, #state{socket=S, transport=T}=State) ->
   ok = ranch:accept_ack(Ref),
   T:setopts(S, [{active, true}, {packet, 4}]),
-  {noreply, State};
+  {ok, {Host, _}} = T:peername(S),
+  {noreply, State#state{host=Host}};
 
-%% handle_info({tcp_closed, Socket}, #state{socket=Socket, proto=tcp}=State) ->
-%%   {stop, tcp_closed, State};
+handle_info({tcp_closed, Socket}, #state{socket=Socket, proto=tcp}=State) ->
+  {stop, normal, State};
 
-%% handle_info({ssl_closed, Socket}, #state{socket=Socket, proto=ssl}=State) ->
-%%   {stop, ssl_closed, State};
+handle_info({ssl_closed, Socket}, #state{socket=Socket, proto=ssl}=State) ->
+  {stop, normal, State};
 
-%% handle_info({tcp_error, Socket, Reason},
-%%             #state{socket=Socket, proto=tcp}=State) ->
-%%   {stop, {tcp_error, Reason}, State};
+handle_info({tcp_error, Socket, Reason},
+            #state{socket=Socket, proto=tcp}=State) ->
+  {stop, Reason, State};
 
-%% handle_info({ssl_error, Socket, Reason},
-%%             #state{socket=Socket, proto=ssl}=State) ->
-%%   {stop, {ssl_error, Reason}, State};
+handle_info({ssl_error, Socket, Reason},
+            #state{socket=Socket, proto=ssl}=State) ->
+  {stop, Reason, State};
 
 handle_info(Info, State) ->
   {stop, {unexpected, Info}, State}.
+
+terminate(_Reason, #state{socket=undefined}) ->
+  ok;
 
 terminate(_Reason, #state{transport=Trans, socket=Socket}) ->
   Trans:close(Socket).

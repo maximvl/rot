@@ -4,7 +4,8 @@
 -export([call/4, call/5, cast/4, get_connection/1,
          connected/0, connected/1]).
 -export([start_server/1, stop_server/1,
-         connect/5, connect_link/5, connect_child_spec/5]).
+         connect/2, connect/3,
+         connect_link/3, connect_child_spec/3]).
 
 start() ->
   [application:ensure_started(A) ||
@@ -59,44 +60,34 @@ start_server(Props) ->
   Proto = proplists:get_value(transport, Props, tcp),
   Acceptors = proplists:get_value(acceptors, Props, 10),
   Jail = proplists:get_value(jail, Props, undefined),
-  {ok, _} = ranch:start_listener(Name, Acceptors, transport(Proto),
-                                 [{port, Port},
-                                  {ip, Ip}],
-                                 rot_worker, [{name, Name},
-                                              {jail, Jail}]).
+  {ok, _} = ranch:start_listener(Name, Acceptors, rot_util:transport(Proto),
+                                 [{port, Port}, {ip, Ip}],
+                                 rot_server, [{name, Name}, {jail, Jail}]).
 
 stop_server(Name) ->
   ranch:stop_listener(Name).
 
-connect(Proto, Host, Port, Opts, Size) ->
-  poolboy:start(poolboy_opts(Size),
-                [client, transport(Proto), Host, Port, Opts]).
+connect(Host, Opts) ->
+  connect(Host, Opts, 4).
 
-connect_link(Proto, Host, Port, Opts, Size) ->
-  poolboy:start_link(poolboy_opts(Size),
-                     [client, transport(Proto), Host, Port, Opts]).
+connect(Host, Opts, Size) ->
+  Port = proplists:get_value(port, Opts, 2222),
+  rot_pool_sup:start({Host, Port}, Host, Opts, Size).
 
-connect_child_spec(Proto, Host, Port, Opts, Size) ->
-  Trans = transport(Proto),
-  Id = {Trans, Host, Port},
-  poolboy:child_spec(Id, poolboy_opts(Size),
-                     [client, Trans, Host, Port, Opts]).
+connect_link(Host, Opts, Size) ->
+  Port = proplists:get_value(port, Opts, 2222),
+  rot_pool_sup:start_link({Host, Port}, Host, Opts, Size).
 
-%% TODO disconnect: stop client poolboy, stop workers
+connect_child_spec(Host, Opts, Size) ->
+  Port = proplists:get_value(port, Opts, 2222),
+  Id = {Host, Port},
+  {Id, {rot_pool_sup, start_link, [Id, Host, Opts, Size]},
+   permanent, 5000, supervisor, [rot_pool_sup]}.
+
+%% TODO disconnect: stop client pool, stop workers
 %% disconnect(Node) ->
 %%   Pids = gproc:select(
 %%            props,
 %%            [{{{p, l, {rot_connection, Node}}, '$1', '_'}, [], ['$1']}]),
 %%   cast(Node, rot, stop, []),
 %%   [gen_server:cast(stop, P) || P <- Pids].
-
-
-%% Utils
-
-poolboy_opts(Size) ->
-  [{worker_module, rot_worker},
-   {size, Size},
-   {max_overflow, 0}].
-
-transport(tcp) -> ranch_tcp;
-transport(ssl) -> ranch_ssl.

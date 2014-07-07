@@ -22,9 +22,12 @@
 -record(state, {socket :: ranch:socket(),
                 transport :: module(),
                 proto = tcp :: tcp | ssl,
-                jail :: module() | undefined,
+                default_jail :: module() | undefined,
+                jails :: [{any(), module()}],
+                jail  :: module() | undefined,
                 options :: list(),
                 host :: any(),
+                port :: integer(),
                 local_name :: any(),
                 remote_name :: any()}).
 
@@ -39,12 +42,16 @@ start_link(Ref, Socket, Trans, Opts) ->
 %%%===================================================================
 init([Ref, Socket, Trans, Opts]) ->
   JailMod = proplists:get_value(jail, Opts),
+  Jails = proplists:get_value(jails, Opts),
   LocalName = proplists:get_value(name, Opts),
+  Port = proplists:get_value(port, Opts),
+  Host = proplists:get_value(ip, Opts),
   true = LocalName /= undefined,
   Proto = rot_util:protocol(Trans),
   self() ! {init, Ref},
-  {ok, #state{socket=Socket, transport=Trans,
-              options=Opts, jail=JailMod,
+  {ok, #state{host=Host, port=Port,
+              socket=Socket, transport=Trans,
+              options=Opts, default_jail=JailMod, jails=Jails,
               local_name=LocalName, proto=Proto}}.
 
 handle_call(_Request, _From, State) ->
@@ -61,16 +68,23 @@ handle_cast(stop, State) ->
 handle_cast(_Msg, State) ->
   {noreply, State}.
 
-handle_info({Proto, Socket, Data}, #state{proto=Proto,
+handle_info({Proto, Socket, Data}, #state{host=Host,
+                                          proto=Proto,
                                           socket=Socket,
                                           transport=Trans,
                                           remote_name=undefined,
+                                          default_jail=DefJail,
+                                          jails=Jails,
                                           local_name=LName}=State) ->
   case binary_to_term(Data) of
     {reg, RName} ->
       Trans:send(Socket, term_to_binary({ok, LName})),
-      gproc:add_local_property({rot_connection, RName}, ok),
-      {noreply, State#state{remote_name=RName}};
+      Jail = proplists:get_value(RName, Jails, DefJail),
+      gproc:add_local_property({rot_connection, RName,
+                                [{host, Host}, {port, port},
+                                 {name, LName}, {transport, Trans}, {jail, Jail}]},
+                               ok),
+      {noreply, State#state{remote_name=RName, jail=Jail}};
     _ ->
       {stop, badreg, State}
   end;

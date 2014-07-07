@@ -2,7 +2,8 @@
 
 -export([start/0, stop/0]).
 -export([call/4, call/5, cast/4, get_connection/1,
-         connected/0, connected/1]).
+         connected/0, connected/1, disconnect/1,
+         connections/0, connection/1]).
 -export([start_server/1, stop_server/1,
          connect/2, connect/3,
          connect_link/3, connect_child_spec/3]).
@@ -19,12 +20,25 @@ connected() ->
   lists:usort(
     gproc:select(
       props,
-      [{{{p, l, {rot_connection, '$1'}}, '_', '_'}, [], ['$1']}])).
+      [{{{p, l, {rot_connection, '$1', '_'}}, '_', '_'}, [], ['$1']}])).
 
 connected(Node) ->
   gproc:select_count(
     props,
-    [{{{p, l, {rot_connection, Node}}, '_', '_'}, [], [true]}]).
+    [{{{p, l, {rot_connection, Node, '_'}}, '_', '_'}, [], [true]}]).
+
+%% verbose connections
+connections() ->
+  lists:usort(
+    gproc:select(
+      props,
+      [{{{p, l, {rot_connection, '$1', '$2'}}, '_', '_'}, [], [{{'$1', '$2'}}]}])).
+
+connection(Name) ->
+  lists:usort(
+    gproc:select(
+      props,
+      [{{{p, l, {rot_connection, Name, '$1'}}, '_', '_'}, [], [{{Name, '$1'}}]}])).
 
 call(Node, Module, Fun, Args) ->
   call(Node, Module, Fun, Args, 5000).
@@ -60,9 +74,11 @@ start_server(Props) ->
   Proto = proplists:get_value(transport, Props, tcp),
   Acceptors = proplists:get_value(acceptors, Props, 10),
   Jail = proplists:get_value(jail, Props, undefined),
+  Jails = proplists:get_value(jails, Props, []),
   ranch:start_listener(Name, Acceptors, rot_util:transport(Proto),
                        [{port, Port}, {ip, Ip}],
-                       rot_server, [{name, Name}, {jail, Jail}]).
+                       rot_server, [{port, Port}, {host, Ip}, {name, Name},
+                                    {jail, Jail}, {jails, Jails}]).
 
 stop_server(Name) ->
   ranch:stop_listener(Name).
@@ -85,9 +101,20 @@ connect_child_spec(Host, Opts, Size) ->
    permanent, 5000, supervisor, [rot_pool_sup]}.
 
 %% TODO disconnect: stop client pool, stop workers
-%% disconnect(Node) ->
-%%   Pids = gproc:select(
-%%            props,
-%%            [{{{p, l, {rot_connection, Node}}, '$1', '_'}, [], ['$1']}]),
-%%   cast(Node, rot, stop, []),
-%%   [gen_server:cast(stop, P) || P <- Pids].
+disconnect(Name) ->
+  case connection(Name) of
+    [{Name, Opts}] ->
+      Host = proplists:get_value(host, Opts),
+      Port = proplists:get_value(port, Opts),
+      case gproc:lookup_local_name({rot_pool, {Host, Port}}) of
+        P when is_pid(P) -> erlang:exit(P, shutdown);
+        _ -> not_connected
+      end;
+    _ -> not_connected
+  end.
+
+  %% Pids = gproc:select(
+  %%          props,
+  %%          [{{{p, l, {rot_connection, Node}}, '$1', '_'}, [], ['$1']}]),
+  %% %% cast(Node, rot, stop, []),
+  %% [gen_server:cast(stop, P) || P <- Pids].

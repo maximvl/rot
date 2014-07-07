@@ -50,7 +50,10 @@ init([Host, Opts]) ->
       case Transport:recv(Socket, 0, 5000) of
         {ok, Data} ->
           {ok, RName} = binary_to_term(Data),
-          gproc:add_local_property({rot_connection, RName}, ok),
+          gproc:add_local_property({rot_connection, RName,
+                                    [{host, Host}, {port, Port},
+                                     {name, LocalName}, {transport, Transport},
+                                     {jail, Jail}]}, ok),
           Transport:setopts(Socket, [{active, true}]),
           {ok, #state{jail=Jail, local_name=LocalName,
                       options=Opts, transport=Transport,

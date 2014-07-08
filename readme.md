@@ -15,7 +15,7 @@ Connect and call from node2:
 {ok,<0.153.0>}
 (node2@t530)2> rot:connected().
 [srv]
-(node2@t530)3> rot:call(srv, erlang, self, []).
+(node2@t530)3> rot:call(srv, {erlang, self, []}).
 <12820.366.0>
 ```
 
@@ -23,7 +23,7 @@ After connect on node1:
 ```
 (node1@t530)2> rot:connected().
 [cl]
-(node1@t530)3> rot:call(cl, erlang, self, []).
+(node1@t530)3> rot:call(cl, {erlang, self, []}).
 <12756.340.0>
 ```
 
@@ -38,9 +38,9 @@ After connect on node1:
 * ```rot:connect(Host, Opts)``` - same as ```rot:connect(Host, Opts, 4)```
 * ```rot:connect_link(Host, Opts, Connections)``` - connect to rot server, and link connection pool supervisor
 * ```rot:connect_child_spec(Host, Opts, Connections)``` - supervisor child spec for connection pool supervisor
-* ```rot:call(Node, M, F, A, Timeout)``` - sync call to node, timeout in ms
-* ```rot:call(Node, M, F, A)``` - same as ```rot:call(Node, M, F, A, 5000)```
-* ```rot:cast(Node, M, F, A)``` - async cast to node
+* ```rot:call(Node, {M, F, A}, Timeout)``` - sync call to node, timeout in ms
+* ```rot:call(Node, {M, F, A})``` - same as ```rot:call(Node, M, F, A, 5000)```
+* ```rot:cast(Node, {M, F, A})``` - async cast to node
 
 ####Technologies used:
 * https://github.com/extend/ranch - server connections pool
@@ -60,11 +60,11 @@ node2:
 ```
 (node2@t530)1> rot:connect(localhost, [{name, cl}]).
 {ok,<0.118.0>}
-(node2@t530)2> rot:call(srv, erlang, memory, []).
+(node2@t530)2> rot:call(srv, {erlang, memory, []}).
 ** exception error: undefined function ets:memory/0
      in function  rot_util:handle_call/5 (rot/src/rot_util.erl, line 45)
      in call from proc_lib:init_p/3 (proc_lib.erl, line 224)
-(node2@t530)3> rot:call(srv, erlang, module_info, []).
+(node2@t530)3> rot:call(srv, {erlang, module_info, []}).
 [{exports,[{match_spec_run,2},
            {repair_continuation,2},
            {fun2ms,1},

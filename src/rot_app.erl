@@ -20,5 +20,5 @@ start(_StartType, _StartArgs) ->
 
 stop(_State) ->
   Name = proplists:get_value(name, application:get_env(rot, server, [])),
-  rot:stop_server(Name),
+  rot:disconnect(Name),
   ok.

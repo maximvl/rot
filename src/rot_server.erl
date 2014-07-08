@@ -25,9 +25,6 @@
                 default_jail :: module() | undefined,
                 jails :: [{any(), module()}],
                 jail  :: module() | undefined,
-                options :: list(),
-                host :: any(),
-                port :: integer(),
                 local_name :: any(),
                 remote_name :: any()}).
 
@@ -44,14 +41,11 @@ init([Ref, Socket, Trans, Opts]) ->
   JailMod = proplists:get_value(jail, Opts),
   Jails = proplists:get_value(jails, Opts),
   LocalName = proplists:get_value(name, Opts),
-  Port = proplists:get_value(port, Opts),
-  Host = proplists:get_value(ip, Opts),
   true = LocalName /= undefined,
   Proto = rot_util:protocol(Trans),
   self() ! {init, Ref},
-  {ok, #state{host=Host, port=Port,
-              socket=Socket, transport=Trans,
-              options=Opts, default_jail=JailMod, jails=Jails,
+  {ok, #state{socket=Socket, transport=Trans,
+              default_jail=JailMod, jails=Jails,
               local_name=LocalName, proto=Proto}}.
 
 handle_call(_Request, _From, State) ->
@@ -68,8 +62,7 @@ handle_cast(stop, State) ->
 handle_cast(_Msg, State) ->
   {noreply, State}.
 
-handle_info({Proto, Socket, Data}, #state{host=Host,
-                                          proto=Proto,
+handle_info({Proto, Socket, Data}, #state{proto=Proto,
                                           socket=Socket,
                                           transport=Trans,
                                           remote_name=undefined,
@@ -78,12 +71,12 @@ handle_info({Proto, Socket, Data}, #state{host=Host,
                                           local_name=LName}=State) ->
   case binary_to_term(Data) of
     {reg, RName} ->
+      {ok, {RHost, RPort}} = Trans:peername(Socket),
+      gproc:add_local_property({rot_worker, RName}, ok),
+      gproc:send({n, l, {rot_connection, LName}},
+                 {connected, RName, RHost, RPort}),
       Trans:send(Socket, term_to_binary({ok, LName})),
       Jail = proplists:get_value(RName, Jails, DefJail),
-      gproc:add_local_property({rot_connection, RName,
-                                [{host, Host}, {port, port},
-                                 {name, LName}, {transport, Trans}, {jail, Jail}]},
-                               ok),
       {noreply, State#state{remote_name=RName, jail=Jail}};
     _ ->
       {stop, badreg, State}
@@ -100,8 +93,7 @@ handle_info({Proto, Socket, Data}, #state{socket=Socket,
 handle_info({init, Ref}, #state{socket=S, transport=T}=State) ->
   ok = ranch:accept_ack(Ref),
   T:setopts(S, [{active, true}, {packet, 4}]),
-  {ok, {Host, _}} = T:peername(S),
-  {noreply, State#state{host=Host}};
+  {noreply, State};
 
 handle_info({tcp_closed, Socket}, #state{socket=Socket, proto=tcp}=State) ->
   {stop, normal, State};

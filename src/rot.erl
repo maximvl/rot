@@ -1,10 +1,10 @@
 -module(rot).
 
 -export([start/0, stop/0]).
--export([call/4, call/5, cast/4, get_connection/1,
-         connected/0, connected/1, disconnect/1,
-         connections/0, connection/1]).
--export([start_server/1, stop_server/1,
+-export([call/2, call/3, cast/2,
+         connected/1, disconnect/1,
+         connections/0, servers/0]).
+-export([start_server/1, start_server_link/1,
          connect/2, connect/3,
          connect_link/3, connect_child_spec/3]).
 
@@ -16,83 +16,44 @@ start() ->
 stop() ->
   application:stop(rot).
 
-connected() ->
-  lists:usort(
-    gproc:select(
-      props,
-      [{{{p, l, {rot_connection, '$1', '_'}}, '_', '_'}, [], ['$1']}])).
-
-connected(Node) ->
-  gproc:select_count(
-    props,
-    [{{{p, l, {rot_connection, Node, '_'}}, '_', '_'}, [], [true]}]).
-
-%% verbose connections
+%% remote connected
 connections() ->
-  lists:usort(
-    gproc:select(
-      props,
-      [{{{p, l, {rot_connection, '$1', '$2'}}, '_', '_'}, [], [{{'$1', '$2'}}]}])).
+  gproc:select(
+    props,
+    [{{{p, l, {rot_connection, '$1'}}, '$2', '$3'}, [], [{{'$1', '$2', '$3'}}]}]).
 
-connection(Name) ->
-  lists:usort(
-    gproc:select(
-      props,
-      [{{{p, l, {rot_connection, Name, '$1'}}, '_', '_'}, [], [{{Name, '$1'}}]}])).
+connected(Name) ->
+  gproc:lookup_local_properties({rot_connection, Name}).
 
-call(Node, Module, Fun, Args) ->
-  call(Node, Module, Fun, Args, 5000).
+%% local connections
+servers() ->
+  gproc:select(
+    props,
+    [{{{p, l, {rot_server, '$1'}}, '$2', '$3'}, [], [{{'$1', '$2', '$3'}}]}]).
 
-call(Node, Module, Fun, Args, Timeout) ->
-  case get_connection(Node) of
-    Pid when is_pid(Pid) ->
-      rot_util:rpc_call(Pid, {Module, Fun, Args}, Timeout);
-    _ ->
-      {error, no_connection}
-  end.
+call(Node, MFA) ->
+  call(Node, MFA, 5000).
 
-cast(Node, Module, Fun, Args) ->
-  case get_connection(Node) of
-    Pid when is_pid(Pid) ->
-      rot_util:rpc_cast(Pid, {Module, Fun, Args});
-    _ ->
-      {error, no_connection}
-  end.
+call(Node, MFA, Timeout) when tuple_size(MFA) == 3 orelse tuple_size(MFA) == 2 ->
+  rot_util:rpc_call(Node, MFA, Timeout).
 
-get_connection(Node) ->
-  case gproc:lookup_local_properties({rot_connection, Node}) of
-    [] ->
-      undefined;
-    Procs ->
-      element(1, lists:nth(random:uniform(length(Procs)), Procs))
-  end.
+cast(Node, MFA) when tuple_size(MFA) == 3 orelse tuple_size(MFA) == 2 ->
+  rot_util:rpc_cast(Node, MFA).
 
 start_server(Props) ->
-  Ip = proplists:get_value(ip, Props, {0, 0, 0, 0}),
-  Port = proplists:get_value(port, Props, 2222),
-  Name = proplists:get_value(name, Props, node()),
-  Proto = proplists:get_value(transport, Props, tcp),
-  Acceptors = proplists:get_value(acceptors, Props, 10),
-  Jail = proplists:get_value(jail, Props, undefined),
-  Jails = proplists:get_value(jails, Props, []),
-  ranch:start_listener(Name, Acceptors, rot_util:transport(Proto),
-                       [{port, Port}, {ip, Ip}],
-                       rot_server, [{port, Port}, {host, Ip}, {name, Name},
-                                    {jail, Jail}, {jails, Jails}]).
+  rot_connection:start_server(Props).
 
-stop_server(Name) ->
-  ranch:stop_listener(Name).
+start_server_link(Props) ->
+  rot_connection:start_server_link(Props).
 
 connect(Host, Opts) ->
   connect(Host, Opts, 4).
 
 connect(Host, Opts, Size) ->
-  Port = proplists:get_value(port, Opts, 2222),
-  rot_pool_sup:start({Host, Port}, Host, Opts, Size).
+  rot_connection:start_client([{host, Host}, {size, Size} | Opts]).
 
 connect_link(Host, Opts, Size) ->
-  Port = proplists:get_value(port, Opts, 2222),
-  rot_pool_sup:start_link({Host, Port}, Host, Opts, Size).
+  rot_connection:start_client_link([{host, Host}, {size, Size} | Opts]).
 
 connect_child_spec(Host, Opts, Size) ->
   Port = proplists:get_value(port, Opts, 2222),
@@ -100,21 +61,6 @@ connect_child_spec(Host, Opts, Size) ->
   {Id, {rot_pool_sup, start_link, [Id, Host, Opts, Size]},
    permanent, 5000, supervisor, [rot_pool_sup]}.
 
-%% TODO disconnect: stop client pool, stop workers
+%% disconnect: stops client pool or server
 disconnect(Name) ->
-  case connection(Name) of
-    [{Name, Opts}] ->
-      Host = proplists:get_value(host, Opts),
-      Port = proplists:get_value(port, Opts),
-      case gproc:lookup_local_name({rot_pool, {Host, Port}}) of
-        P when is_pid(P) -> erlang:exit(P, shutdown);
-        _ -> not_connected
-      end;
-    _ -> not_connected
-  end.
-
-  %% Pids = gproc:select(
-  %%          props,
-  %%          [{{{p, l, {rot_connection, Node}}, '$1', '_'}, [], ['$1']}]),
-  %% %% cast(Node, rot, stop, []),
-  %% [gen_server:cast(stop, P) || P <- Pids].
+  rot_connection:stop_connection(Name).

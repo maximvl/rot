@@ -23,7 +23,6 @@
                 transport :: module(),
                 proto = tcp :: tcp | ssl,
                 jail :: module() | undefined,
-                options :: list(),
                 host :: any(),
                 local_name :: any(),
                 remote_name :: any()}).
@@ -38,26 +37,25 @@ start_link(Host, Opts) ->
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
-init([Host, Opts]) ->
+init([RHost, Opts]) ->
   Jail = proplists:get_value(jail, Opts),
   LocalName = proplists:get_value(name, Opts, node()),
   Transport = rot_util:transport(proplists:get_value(transport, Opts, tcp)),
-  Port = proplists:get_value(port, Opts, 2222),
-  case Transport:connect(Host, Port, [{packet, 4}, {active, false}]) of
+  RPort = proplists:get_value(port, Opts, 2222),
+  case Transport:connect(RHost, RPort, [{packet, 4}, {active, false}]) of
     {ok, Socket} ->
       Transport:setopts(Socket, [{packet, 4}]),
       Transport:send(Socket, term_to_binary({reg, LocalName})),
       case Transport:recv(Socket, 0, 5000) of
         {ok, Data} ->
           {ok, RName} = binary_to_term(Data),
-          gproc:add_local_property({rot_connection, RName,
-                                    [{host, Host}, {port, Port},
-                                     {name, LocalName}, {transport, Transport},
-                                     {jail, Jail}]}, ok),
+          gproc:add_local_property({rot_worker, RName}, ok),
+          gproc:send({n, l, {rot_connection, LocalName}},
+                     {connected, RName, RHost, RPort}),
           Transport:setopts(Socket, [{active, true}]),
           {ok, #state{jail=Jail, local_name=LocalName,
-                      options=Opts, transport=Transport,
-                      host=Host, socket=Socket, remote_name=RName}};
+                      transport=Transport, host=RHost,
+                      socket=Socket, remote_name=RName}};
         {error, E} ->
           {stop, E}
       end;

@@ -3,10 +3,10 @@
 -export([rpc_call/3, rpc_cast/2, protocol/1, transport/1]).
 -export([handle_data/3, pack/2, pack/3]).
 
-rpc_call(Pid, MFA, Timeout) ->
+rpc_call(Node, MFA, Timeout) ->
   Ref = make_ref(),
   gproc:add_local_name({rot_call, Ref}),
-  gen_server:cast(Pid, {send, rot_util:pack(call, Ref, MFA)}),
+  rot_connection:send(Node, rot_util:pack(call, Ref, MFA)),
   receive
     {'$rot_reply', Ref, Reply} ->
       gproc:unreg({n, l, {rot_call, Ref}}),
@@ -18,11 +18,11 @@ rpc_call(Pid, MFA, Timeout) ->
       end
   after Timeout ->
       gproc:unreg({n, l, {rot_call, Ref}}),
-      erlang:exit({timeout, {'rot:call', Pid, MFA, Timeout}})
+      erlang:exit({timeout, {'rot:call', Node, MFA, Timeout}})
   end.
 
-rpc_cast(Pid, MFA) ->
-  gen_server:cast(Pid, {send, rot_util:pack(cast, MFA)}).
+rpc_cast(Node, MFA) ->
+  rot_connection:send(Node, rot_util:pack(cast, MFA)).
 
 handle_data(Node, Data, Jail) ->
   handle_rpc(Node, binary_to_term(Data), Jail).
@@ -37,8 +37,7 @@ handle_rpc(_, {'$rot_reply', Id, Data}, _) ->
   case gproc:lookup_local_name({rot_call, Id}) of
     Pid when is_pid(Pid) ->
       Pid ! {'$rot_reply', Id, Data};
-    _ ->
-      ok
+    _ -> ok
   end.
 
 handle_call(Node, Id, M, F, A) ->
@@ -46,15 +45,7 @@ handle_call(Node, Id, M, F, A) ->
           catch T:E ->
               {'$rot_error', T, E, erlang:get_stacktrace()}
           end,
-  reply(Node, pack(reply, Id, Reply)).
-
-reply(Node, Data) ->
-  case rot:get_connection(Node) of
-    Pid when is_pid(Pid) ->
-      gen_server:cast(Pid, {send, Data});
-    _ ->
-      throw({not_connected, Node})
-  end.
+  rot_connection:send(Node, pack(reply, Id, Reply)).
 
 pack(call, Id, {M, F, A}) ->
   erlang:term_to_binary({'$rot_call', Id, M, F, A});

@@ -115,7 +115,8 @@ handle_info(Info, State) ->
 terminate(_Reason, #state{socket=undefined}) ->
   ok;
 
-terminate(_Reason, #state{transport=Trans, socket=Socket}) ->
+terminate(_Reason, #state{transport=Trans, socket=Socket, remote_name=RName, local_name=LName}) ->
+  gproc:send({n, l, {rot_connection, LName}}, {disconnected, RName}),
   Trans:close(Socket).
 
 code_change(_OldVsn, State, _Extra) ->

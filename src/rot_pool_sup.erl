@@ -4,7 +4,6 @@
 
 %% API
 -export([start_link/3]).
--export([start_child/1]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -17,21 +16,16 @@
 %% ===================================================================
 start_link(Host, Opts, Size) ->
   {ok, Pid} = supervisor:start_link(?MODULE, [Host, Opts]),
-  AllStarted = lists:all(
-                 fun({R, _}) -> R == ok end,
-                 [rot_pool_sup:start_child(Pid) ||
-                   _ <- lists:seq(1, Size)]),
+  Procs = [supervisor:start_child(Pid, []) || _ <- lists:seq(1, Size)],
+  AllStarted = lists:all(fun({R, _}) -> R == ok end, Procs),
   %% have to check initial connections
   %% because superviser does not restart them
   if AllStarted ->
       {ok, Pid};
      true ->
       erlang:exit(Pid, shutdown),
-      {error, connection_failed}
+      hd(Procs)                                 % contains error
   end.
-
-start_child(Pid) ->
-  supervisor:start_child(Pid, []).
 
 %% ===================================================================
 %% Supervisor callbacks

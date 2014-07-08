@@ -11,7 +11,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_client/1, start_server/1,
+-export([start_client/1, start_server/1, start_link/2,
          start_client_link/1, start_server_link/1,
          stop_connection/1, send/2]).
 
@@ -22,7 +22,7 @@
 -define(SERVER, ?MODULE).
 
 -record(state, {kind :: client | server,
-                pid :: pid(),
+                pid :: pid() | reference(),
                 name :: any(),
                 opts :: [any()]}).
 
@@ -41,6 +41,9 @@ start_server(Opts) ->
 
 start_client(Opts) ->
   gen_server:start(?MODULE, [client, Opts], []).
+
+start_link(Kind, Opts) ->
+  gen_server:start_link(?MODULE, [Kind, Opts], []).
 
 stop_connection(Name) ->
   case gproc:lookup_local_name({rot_connection, Name}) of
@@ -82,8 +85,8 @@ init([server, Opts]) ->
   {ok, Pid} = ranch:start_listener(Name, Acceptors, rot_util:transport(Proto),
                                    [{port, Port}, {ip, Ip}], rot_server,
                                    [{name, Name}, {jail, Jail}, {jails, Jails}]),
-  erlang:link(Pid),
-  {ok, #state{pid=Pid, kind=server, name=Name,
+  Ref = erlang:monitor(process, Pid),
+  {ok, #state{pid=Ref, kind=server, name=Name,
               opts=[{name, Name}, {host, Ip},
                     {port, Port}, {proto, Proto},
                     {acceptors, Acceptors}, {jail, Jail},
@@ -114,6 +117,7 @@ handle_cast(_Msg, State) ->
 handle_info({connected, RemoteName, RemoteHost, RemotePort}, #state{opts=Opts}=State) ->
   %% client may be connected to different server on this node
   %% need to check this server only
+  %% what to do if different clients connect with same name?
   case gproc:select(props,
                     [{{{p, l, {rot_connection, RemoteName}}, self(), '_'},
                       [], [true]}]) of
@@ -123,6 +127,14 @@ handle_info({connected, RemoteName, RemoteHost, RemotePort}, #state{opts=Opts}=S
     _ -> ok
   end,
   {noreply, State};
+
+handle_info({disconnected, RemoteName}, State) ->
+  %% throws error when property does not present
+  catch gproc:unreg({p, l, {rot_connection, RemoteName}}),
+  {noreply, State};
+
+handle_info({'DOWN', MonitorRef, process, _Object, Info}, #state{pid=MonitorRef}=State) ->
+  {stop, Info, State};
 
 handle_info(_Info, State) ->
   {noreply, State}.

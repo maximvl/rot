@@ -40,17 +40,17 @@ call(Node, MFA, Timeout) when tuple_size(MFA) == 3 orelse tuple_size(MFA) == 2 -
 cast(Node, MFA) when tuple_size(MFA) == 3 orelse tuple_size(MFA) == 2 ->
   rot_util:rpc_cast(Node, MFA).
 
-start_server(Props) ->
-  rot_connection:start_server(Props).
+start_server(Opts) ->
+  rot_sup:start_server(Opts).
 
-start_server_link(Props) ->
-  rot_connection:start_server_link(Props).
+start_server_link(Opts) ->
+  rot_connection:start_server_link(Opts).
 
 connect(Host, Opts) ->
   connect(Host, Opts, 4).
 
 connect(Host, Opts, Size) ->
-  rot_connection:start_client([{host, Host}, {size, Size} | Opts]).
+  rot_sup:start_client([{host, Host}, {size, Size} | Opts]).
 
 connect_link(Host, Opts, Size) ->
   rot_connection:start_client_link([{host, Host}, {size, Size} | Opts]).

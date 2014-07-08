@@ -11,8 +11,8 @@
 
 start(_StartType, _StartArgs) ->
   case application:get_env(rot, server) of
-    {ok, Props} ->
-      rot:start_server(Props);
+    {ok, Opts} ->
+      rot:start_server(Opts);
     _ ->
       ok
   end,

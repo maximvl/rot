@@ -50,10 +50,10 @@ connect(Host, Opts) ->
   connect(Host, Opts, 4).
 
 connect(Host, Opts, Size) ->
-  rot_sup:start_client([{host, Host}, {size, Size} | Opts]).
+  rot_sup:start_client([{ip, Host}, {size, Size} | Opts]).
 
 connect_link(Host, Opts, Size) ->
-  rot_connection:start_client_link([{host, Host}, {size, Size} | Opts]).
+  rot_connection:start_client_link([{ip, Host}, {size, Size} | Opts]).
 
 connect_child_spec(Host, Opts, Size) ->
   Port = proplists:get_value(port, Opts, 2222),

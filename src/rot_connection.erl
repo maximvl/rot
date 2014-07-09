@@ -15,6 +15,8 @@
          start_client_link/1, start_server_link/1,
          stop_connection/1, send/2]).
 
+-export([fill_default_opts/2]).
+
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
@@ -70,39 +72,43 @@ get_worker(Node) ->
 %%%===================================================================
 
 init([server, Opts]) ->
-  Name = proplists:get_value(name, Opts, node()),
+  Defaults = [{name, node()}, {ip, {0, 0, 0, 0}},
+              {port, 2222}, {proto, tcp},
+              {acceptors, 10}, {jail, undefined}, {jails, []}],
+  RealOpts = fill_default_opts(Opts, Defaults),
+  Name = get_prop(name, RealOpts),
   gproc:add_local_name({rot_connection, Name}),
-  Ip = proplists:get_value(ip, Opts, {0, 0, 0, 0}),
-  Port = proplists:get_value(port, Opts, 2222),
-  Proto = proplists:get_value(transport, Opts, tcp),
-  Acceptors = proplists:get_value(acceptors, Opts, 10),
-  Jail = proplists:get_value(jail, Opts, undefined),
-  Jails = proplists:get_value(jails, Opts, []),
-  gproc:add_local_property({rot_server, Name}, [{host, Ip}, {port, Port},
-                                                {proto, Proto}, {acceptors, Acceptors},
-                                                {jail, Jail}, {jails, Jails}]),
-
+  gproc:add_local_property({rot_server, Name}, RealOpts),
+  Proto = get_prop(proto, RealOpts),
+  Ip = get_prop(ip, RealOpts),
+  Port = get_prop(port, RealOpts),
+  RanchOpts = case Proto of
+                ssl ->
+                  CertFile = get_prop(cacertfile, RealOpts),
+                  PKFile = get_prop(keyfile, RealOpts),
+                  [{port, Port}, {ip, Ip},
+                   {cacertfile, CertFile}, {keyfile, PKFile},
+                   {verify, verify_peer}];
+                tcp -> [{port, Port}, {ip, Ip}]
+              end,
+  Acceptors = get_prop(acceptors, RealOpts),
   {ok, Pid} = ranch:start_listener(Name, Acceptors, rot_util:transport(Proto),
-                                   [{port, Port}, {ip, Ip}], rot_server,
-                                   [{name, Name}, {jail, Jail}, {jails, Jails}]),
+                                   RanchOpts, rot_server, RealOpts),
   Ref = erlang:monitor(process, Pid),
   {ok, #state{pid=Ref, kind=server, name=Name,
-              opts=[{name, Name}, {host, Ip},
-                    {port, Port}, {proto, Proto},
-                    {acceptors, Acceptors}, {jail, Jail},
-                    {jails, Jails}]}};
+              opts=RealOpts}};
 
 init([client, Opts]) ->
-  Name = proplists:get_value(name, Opts, node()),
+  Defaults = [{name, node()}, {port, 2222},
+              {proto, tcp}, {size, 4},
+              {jail, undefined}, {jails, []}],
+  RealOpts = fill_default_opts(Opts, Defaults),
+  Name = get_prop(name, RealOpts),
   gproc:add_local_name({rot_connection, Name}),
-  Host = proplists:get_value(host, Opts),
-  Size = proplists:get_value(size, Opts),
-  Proto = proplists:get_value(transport, Opts, tcp),
-  Jail = proplists:get_value(jail, Opts),
-  {ok, Pid} = rot_pool_sup:start_link(Host, Opts, Size),
-  {ok, #state{pid=Pid, kind=client,
-              opts=[{name, Name}, {proto, Proto},
-                    {workers, Size}, {jail, Jail}]}}.
+  Host = get_prop(ip, RealOpts),
+  Size = get_prop(size, RealOpts),
+  {ok, Pid} = rot_pool_sup:start_link(Host, RealOpts, Size),
+  {ok, #state{pid=Pid, kind=client, opts=RealOpts}}.
 
 handle_call(_Request, _From, State) ->
   Reply = ok,
@@ -150,3 +156,20 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+fill_default_opts(Plist, Defaults) ->
+  {L1, L2} = lists:foldl(fun({K, V}, {Vals, Acc}) ->
+                             case lists:keytake(K, 1, Acc) of
+                               false -> V2 = V, Acc2 = Acc;
+                               {value, {K, V2}, Acc2} -> ok
+                             end,
+                             {[{K, V2} | Vals], Acc2}
+                         end, {[], Plist}, Defaults),
+  L1 ++ L2.
+
+get_prop(K, L) -> get_prop(K, L, undefined).
+get_prop(K, L, V) ->
+  case lists:keyfind(K, 1, L) of
+    false -> V;
+    {K, V2} -> V2
+  end.

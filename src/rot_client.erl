@@ -40,9 +40,17 @@ start_link(Host, Opts) ->
 init([RHost, Opts]) ->
   Jail = proplists:get_value(jail, Opts),
   LocalName = proplists:get_value(name, Opts, node()),
-  Transport = rot_util:transport(proplists:get_value(transport, Opts, tcp)),
+  Proto = proplists:get_value(transport, Opts, tcp),
+  Transport = rot_util:transport(Proto),
   RPort = proplists:get_value(port, Opts, 2222),
-  case Transport:connect(RHost, RPort, [{packet, 4}, {active, false}]) of
+  ConnectOps = case Proto of
+                 tcp -> [{packet, 4}, {active, false}];
+                 ssl ->
+                   CertFile = proplists:get_value(cacertfile, Opts),
+                   KeyFile = proplists:get_value(keyfile, Opts),
+                   [{packet, 4}, {active, false}, {cacertfile, CertFile}, {keyfile, KeyFile}]
+               end,
+  case Transport:connect(RHost, RPort, ConnectOps) of
     {ok, Socket} ->
       Transport:setopts(Socket, [{packet, 4}]),
       Transport:send(Socket, term_to_binary({reg, LocalName})),
